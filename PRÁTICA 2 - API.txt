@@ -1,0 +1,110 @@
+import java.sql.*;
+import java.io.*;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.util.Scanner;
+
+public class ConsultaCep {
+
+    private static final String DB_URL = "jdbc:sqlite:ceps.db";
+    private static final String LOG_FILE = "consulta_log.txt";
+    private static Connection conn;
+
+    public static void main(String[] args) {
+        try {
+            connectToDatabase();
+            createTableIfNotExists();
+
+            Scanner scanner = new Scanner(System.in);
+            int option;
+            do {
+                showMenu();
+                option = scanner.nextInt();
+                scanner.nextLine();  
+                switch (option) {
+                    case 1:
+                        consultarCep(scanner);
+                        break;
+                    case 2:
+                        listarCepsConsultados();
+                        break;
+                    case 3:
+                        System.out.println("Saindo...");
+                        break;
+                    default:
+                        System.out.println("Opção inválida. Tente novamente.");
+                }
+            } while (option != 3);
+
+            scanner.close();
+            conn.close();
+        } catch (SQLException | IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void connectToDatabase() throws SQLException {
+        conn = DriverManager.getConnection(DB_URL);
+    }
+
+    private static void createTableIfNotExists() throws SQLException {
+        String sql = "CREATE TABLE IF NOT EXISTS ceps (" +
+                     "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                     "cep TEXT NOT NULL," +
+                     "logradouro TEXT," +
+                     "bairro TEXT," +
+                     "localidade TEXT," +
+                     "uf TEXT)";
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+        }
+    }
+
+    private static void showMenu() {
+        System.out.println("Menu:");
+        System.out.println("1. Consultar Cep");
+        System.out.println("2. Listar Ceps Consultados");
+        System.out.println("3. Sair");
+        System.out.print("Escolha uma opção: ");
+    }
+
+    private static void consultarCep(Scanner scanner) throws SQLException, IOException {
+        System.out.print("Digite o CEP: ");
+        String cep = scanner.nextLine();
+        
+        String logradouro = "Rua Exemplo";
+        String bairro = "Bairro Exemplo";
+        String localidade = "Cidade Exemplo";
+        String uf = "UF";
+
+        String sql = "INSERT INTO ceps (cep, logradouro, bairro, localidade, uf) VALUES (?, ?, ?, ?, ?)";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, cep);
+            pstmt.setString(2, logradouro);
+            pstmt.setString(3, bairro);
+            pstmt.setString(4, localidade);
+            pstmt.setString(5, uf);
+            pstmt.executeUpdate();
+        }
+
+        try (FileWriter fw = new FileWriter(LOG_FILE, true);
+             BufferedWriter bw = new BufferedWriter(fw)) {
+            String timestamp = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+            bw.write(String.format("Consultado CEP %s: %s, %s, %s, %s - %s%n", 
+                                   cep, logradouro, bairro, localidade, uf, timestamp));
+        }
+    }
+
+    private static void listarCepsConsultados() throws SQLException {
+        String sql = "SELECT * FROM ceps";
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                System.out.printf("CEP: %s, Logradouro: %s, Bairro: %s, Localidade: %s, UF: %s%n",
+                                  rs.getString("cep"), rs.getString("logradouro"), 
+                                  rs.getString("bairro"), rs.getString("localidade"),
+                                  rs.getString("uf"));
+            }
+        }
+    }
+}
